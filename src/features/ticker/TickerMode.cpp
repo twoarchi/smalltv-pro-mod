@@ -1,5 +1,6 @@
 #include "TickerMode.h"
 #include <Arduino_GFX_Library.h>
+#include "Platform.h"
 #include "Gfx.h"
 #include "Net.h"
 #include "StockClient.h"
@@ -501,10 +502,14 @@ void TickerMode::invalidate(const Settings& s) {
 }
 
 void TickerMode::wake(const Settings& s) {
+  g_abortFetch = false;
   needRender_ = true;
   lastRotate_ = millis();
   // Defer next network fetch by 800ms so rapid button tapping won't trigger blocking fetches
   stocksDeferNextFetch(setIdx_, 800);
+  if (curPage_ < stocksCount(setIdx_) && !stockAt(curPage_, setIdx_).valid) {
+    stocksPrioritize(setIdx_, curPage_);
+  }
   render(s);
   needRender_ = false;
 }
@@ -551,6 +556,9 @@ void TickerMode::service(const Settings& s) {
     curPage_ = (curPage_ + 1) % pages;
     lastRotate_ = millis();
     needRender_ = true;
+    if (curPage_ < n && !stockAt(curPage_, setIdx_).valid) {
+      stocksPrioritize(setIdx_, curPage_);
+    }
   }
 
   if (n > 0 && curPage_ < n) {

@@ -12,6 +12,7 @@ void  stocksService(const Settings& s);                      // call often; self
 void  stocksForceRefresh(uint8_t set = 0);                  // poll ASAP (e.g. after config save)
 void  stocksForceRefreshAll();
 void  stocksDeferNextFetch(uint8_t set, uint32_t delayMs);   // defer next fetch (debounce for rapid switching)
+void  stocksPrioritize(uint8_t set, uint8_t idx);            // prioritize fetching a specific symbol (e.g. visible page)
 
 uint8_t          stocksCount(uint8_t set = 0);
 const StockData& stockAt(uint8_t i, uint8_t set = 0);

@@ -22,8 +22,12 @@ void stocksInit(const Settings& s, uint8_t set) {
   StockSet& ss = g_sets[set];
   ss.count = ts.symbolCount;
   for (uint8_t i = 0; i < ss.count; i++) {
-    ss.stocks[i].clear();
-    strlcpy(ss.stocks[i].symbol, ts.symbols[i].symbol, MAX_SYMBOL_LEN);
+    bool sameSymbol = (strncmp(ss.stocks[i].symbol, ts.symbols[i].symbol, MAX_SYMBOL_LEN) == 0);
+    if (!sameSymbol) {
+      ss.stocks[i].clear();
+      strlcpy(ss.stocks[i].symbol, ts.symbols[i].symbol, MAX_SYMBOL_LEN);
+      ss.stocks[i].nextTryMs = millis();     // new symbol is due right away
+    }
     ss.stocks[i].source = ts.symbols[i].source;
     ss.stocks[i].qty  = ts.symbols[i].qty;
     ss.stocks[i].cost = ts.symbols[i].cost;
@@ -31,7 +35,6 @@ void stocksInit(const Settings& s, uint8_t set) {
     strlcpy(ss.stocks[i].name,
             ss.stocks[i].userNamed ? ts.symbols[i].name : ts.symbols[i].symbol,
             MAX_NAME_LEN);
-    ss.stocks[i].nextTryMs = millis();     // every symbol is due right away
   }
   ss.refreshing = false;
 }
@@ -61,6 +64,18 @@ void stocksDeferNextFetch(uint8_t set, uint32_t delayMs) {
     }
   }
   ss.refreshing = false;
+}
+
+void stocksPrioritize(uint8_t set, uint8_t idx) {
+  if (set >= NUM_STOCK_SETS) return;
+  StockSet& ss = g_sets[set];
+  if (idx < ss.count) {
+    ss.stocks[idx].nextTryMs = millis();
+    // Preempt active queue so this visible page is fetched next
+    ss.fetchIdx = idx;
+    ss.fetchPhase = 0;
+    ss.refreshing = true;
+  }
 }
 
 uint8_t stocksCount(uint8_t set) {
@@ -284,7 +299,7 @@ static bool fetchNaverForeignMinute(const Settings& s, const TickerSettings& ts,
   if (!client) return false;
 
   HTTPClient http;
-  http.setTimeout((s.httpTimeout > 2500) ? 2500 : s.httpTimeout);
+  http.setTimeout((s.httpTimeout > 5000) ? 5000 : s.httpTimeout);
   http.setReuse(false);
   http.useHTTP10(true);
   if (!http.begin(*client, url)) return false;
@@ -465,7 +480,7 @@ static bool fetchNaverForeign(const Settings& s, const TickerSettings& ts, const
   if (!client) return false;
 
   HTTPClient http;
-  http.setTimeout((s.httpTimeout > 2500) ? 2500 : s.httpTimeout);
+  http.setTimeout((s.httpTimeout > 5000) ? 5000 : s.httpTimeout);
   http.setReuse(false);
   http.useHTTP10(true);
   if (!http.begin(*client, quoteUrl)) return false;
@@ -635,14 +650,11 @@ static bool fetchNaverForeign(const Settings& s, const TickerSettings& ts, const
 static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const char* cleanCode, StockData& d) {
   String url = F("https://api.stock.naver.com/chart/domestic/item/");
   url += cleanCode;
-  url += F("/minute");
 
+  bool isMultiDayMinute = (ts.range == "30m" || ts.range == "60m");
   time_t now = time(nullptr);
-  if (now > 1700000000) {
-    int daysBack = 2;
-    if (ts.range == "30m" || ts.range == "60m") {
-      daysBack = 6;
-    }
+  if (isMultiDayMinute && now > 1700000000) {
+    int daysBack = 4;
     time_t start = now - (daysBack * 86400);
     struct tm tmStart, tmNow;
     localtime_r(&start, &tmStart);
@@ -650,20 +662,22 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
 
     char param[80];
     snprintf(param, sizeof(param),
-             "?startDateTime=%04d%02d%02d090000&endDateTime=%04d%02d%02d%02d%02d00",
+             "/minute?startDateTime=%04d%02d%02d090000&endDateTime=%04d%02d%02d%02d%02d00",
              tmStart.tm_year + 1900, tmStart.tm_mon + 1, tmStart.tm_mday,
              tmNow.tm_year + 1900, tmNow.tm_mon + 1, tmNow.tm_mday,
              tmNow.tm_hour, tmNow.tm_min);
     url += param;
   } else {
-    url += F("?range=1");
+    url += F("/minute?range=1");
   }
 
   std::unique_ptr<NetClient> client(platformMakeSecureClient(2048, nullptr, 512, true));
   if (!client) return false;
 
   HTTPClient http;
-  http.setTimeout((s.httpTimeout > 3500) ? 3500 : s.httpTimeout);
+  uint32_t timeoutMs = isMultiDayMinute ? 6000 : 3500;
+  uint32_t maxLoopMs = isMultiDayMinute ? 7500 : 3500;
+  http.setTimeout((s.httpTimeout > timeoutMs) ? timeoutMs : s.httpTimeout);
   http.setReuse(false);
   http.useHTTP10(true);
   if (!http.begin(*client, url)) return false;
@@ -722,7 +736,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   stream->setTimeout(150);
 
   while (http.connected() || stream->available()) {
-    if (g_abortFetch || (millis() - loopStart > 4500)) {
+    if (g_abortFetch || (millis() - loopStart > maxLoopMs)) {
       break;
     }
     if (millis() - lastPoll > 30) {
@@ -857,7 +871,7 @@ static bool fetchNaver(const Settings& s, const TickerSettings& ts, const char* 
   if (!client) return false;
 
   HTTPClient http;
-  http.setTimeout((s.httpTimeout > 2500) ? 2500 : s.httpTimeout);
+  http.setTimeout((s.httpTimeout > 5000) ? 5000 : s.httpTimeout);
   http.setReuse(false);
   http.useHTTP10(true);
   if (!http.begin(*client, quoteUrl)) return false;
@@ -1372,8 +1386,10 @@ static bool fetchUrl(const Settings& s, const TickerSettings& ts, const String& 
 
 // ---- fetch one symbol, one network request per call -----------------------
 static bool stepSymbol(const Settings& s, const TickerSettings& ts, StockData& d, uint8_t& fetchPhase) {
-  if (g_abortFetch) return false;
-  g_abortFetch = false;
+  if (g_abortFetch) {
+    g_abortFetch = false;
+    return false;
+  }
   char cleanCode[8];
   bool isKr = isKoreanCode(d.symbol, cleanCode, sizeof(cleanCode));
 
@@ -1442,6 +1458,11 @@ static bool symbolDue(const StockData& d) {
 
 // ---------------------------------------------------------------------------
 void stocksService(const Settings& s) {
+  if (g_abortFetch) {
+    g_abortFetch = false;
+    for (uint8_t i = 0; i < NUM_STOCK_SETS; i++) g_sets[i].refreshing = false;
+    return;
+  }
   for (uint8_t tryCount = 0; tryCount < NUM_STOCK_SETS; tryCount++) {
     uint8_t set = g_serviceSet;
     g_serviceSet = (g_serviceSet + 1) % NUM_STOCK_SETS;
