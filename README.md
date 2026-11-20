@@ -1,4 +1,4 @@
-# GeekMagic SmallTV-PRO Modded Firmware (v3.12.0)
+# GeekMagic SmallTV-PRO Modded Firmware (v3.12.2)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-ESP32%208MB-red?style=for-the-badge&logo=espressif" alt="ESP32 8MB" />
@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Font-Korean%20Galmuri-brightgreen?style=for-the-badge" alt="Korean Galmuri Font" />
   <img src="https://img.shields.io/badge/Notify%20Engine-Multi--Line%20Card-orange?style=for-the-badge" alt="Multi-Line Card" />
   <img src="https://img.shields.io/badge/Screen%20Protection-Burn--in%20Wiper-purple?style=for-the-badge" alt="Burn-in Wiper" />
-  <img src="https://img.shields.io/badge/Version-v3.12.0-blue?style=for-the-badge" alt="v3.12.0" />
+  <img src="https://img.shields.io/badge/Version-v3.12.2-blue?style=for-the-badge" alt="v3.12.2" />
 </p>
 
 An advanced, feature-rich custom firmware for the **GeekMagic SmallTV-PRO** desktop cube (classic ESP32 with 8 MB Flash and 1.54" 240×240 IPS display).
