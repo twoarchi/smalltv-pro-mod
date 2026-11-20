@@ -51,7 +51,17 @@ static void drawCandlestick(Arduino_GFX* gfx, const StockData& d,
   int plotH = bottom - top;
 
   // 1. 날짜 구분선 (수직 점선)
-  if (d.dateSplitIdx > 0 && d.dateSplitIdx < n) {
+  if (d.dateSplitCount > 0) {
+    for (uint8_t s = 0; s < d.dateSplitCount; s++) {
+      int splitIdx = d.dateSplits[s];
+      if (splitIdx > 0 && splitIdx < n) {
+        int splitX = padL + (int)((long)plotW * splitIdx / n);
+        for (int vy = top; vy <= bottom; vy += 6) {
+          gfx->drawFastVLine(splitX, vy, 3, C_GRAY);
+        }
+      }
+    }
+  } else if (d.dateSplitIdx > 0 && d.dateSplitIdx < n) {
     int splitX = padL + (int)((long)plotW * d.dateSplitIdx / n);
     for (int vy = top; vy <= bottom; vy += 6) {
       gfx->drawFastVLine(splitX, vy, 3, C_GRAY);
@@ -128,7 +138,17 @@ static void drawSparkline(Arduino_GFX* gfx, const StockData& d,
   int plotH = bottom - top;
 
   // 1. 날짜 구분선 (수직 점선)
-  if (d.dateSplitIdx > 0 && d.dateSplitIdx < n) {
+  if (d.dateSplitCount > 0) {
+    for (uint8_t s = 0; s < d.dateSplitCount; s++) {
+      int splitIdx = d.dateSplits[s];
+      if (splitIdx > 0 && splitIdx < n) {
+        int splitX = padL + (int)((long)plotW * splitIdx / (n - 1));
+        for (int vy = top; vy <= bottom; vy += 6) {
+          gfx->drawFastVLine(splitX, vy, 3, C_GRAY);
+        }
+      }
+    }
+  } else if (d.dateSplitIdx > 0 && d.dateSplitIdx < n) {
     int splitX = padL + (int)((long)plotW * d.dateSplitIdx / (n - 1));
     for (int vy = top; vy <= bottom; vy += 6) {
       gfx->drawFastVLine(splitX, vy, 3, C_GRAY);

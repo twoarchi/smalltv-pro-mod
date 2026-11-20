@@ -18,6 +18,9 @@ struct StockData {
   bool  hasChange;    // a change value was provided/derived
   float prevClose;    // yesterday's closing price
   int   dateSplitIdx; // index where date changes in sparkline (-1 if none)
+  static constexpr uint8_t MAX_DATE_SPLITS = 8;
+  int8_t  dateSplits[MAX_DATE_SPLITS]; // all date boundary indices
+  uint8_t dateSplitCount;              // number of date boundaries in chart
 
   struct Candle {
     float open, high, low, close;
@@ -49,6 +52,8 @@ struct StockData {
     hasChange = false;
     prevClose = 0;
     dateSplitIdx = -1;
+    dateSplitCount = 0;
+    memset(dateSplits, 0, sizeof(dateSplits));
     sparkCount = 0;
     candleCount = 0;
     valid = false;

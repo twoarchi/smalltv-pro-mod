@@ -427,6 +427,8 @@ static bool fetchNaverForeignMinute(const Settings& s, const TickerSettings& ts,
   // Date boundary line: drawn precisely where yesterday ends and today's session begins
   if (yestTaken > 0 && todayTaken > 0) {
     d.dateSplitIdx = d.candleCount;
+    d.dateSplitCount = 1;
+    d.dateSplits[0] = (int8_t)d.candleCount;
   }
 
   // Add today candles (tail of todayRing)
@@ -803,6 +805,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   d.sparkCount = 0;
   d.candleCount = 0;
   d.dateSplitIdx = -1;
+  d.dateSplitCount = 0;
 
   uint32_t candleDates[MAX_SPARK_POINTS];
   for (uint8_t i = 0; i < ringCount; i++) {
@@ -812,14 +815,13 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
     candleDates[i] = ringDates[idx];
   }
 
-  // Find dateSplitIdx: first candle of the most recent day (if multi-day)
-  if (ringCount > 1 && candleDates[ringCount - 1] > 0) {
-    uint32_t latestDay = candleDates[ringCount - 1];
-    for (uint8_t i = 0; i < ringCount; i++) {
-      if (candleDates[i] == latestDay) {
-        if (i > 0) d.dateSplitIdx = (int8_t)i;
-        break;
+  // Find all date boundaries (whenever trading day changes in multi-day data)
+  for (uint8_t i = 1; i < ringCount; i++) {
+    if (candleDates[i] != candleDates[i - 1] && candleDates[i] > 0 && candleDates[i - 1] > 0) {
+      if (d.dateSplitCount < StockData::MAX_DATE_SPLITS) {
+        d.dateSplits[d.dateSplitCount++] = (int8_t)i;
       }
+      d.dateSplitIdx = (int8_t)i;
     }
   }
 
