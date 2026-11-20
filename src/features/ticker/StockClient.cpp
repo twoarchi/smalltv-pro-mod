@@ -173,13 +173,23 @@ static String buildWebhookUrl(const TickerSettings& t, const char* symbol) {
 }
 
 static const char* yahooInterval(const String& r) {
-  if (r == "1m" || r == "5m") return "1m";
+  if (r == "1m")  return "1m";
+  if (r == "5m")  return "5m";
+  if (r == "30m") return "30m";
+  if (r == "60m") return "60m";
   if (r == "1d")  return "5m";
   if (r == "5d")  return "30m";
   if (r == "1mo" || r == "3mo" || r == "6mo" || r == "ytd") return "1d";
   if (r == "1y"  || r == "2y")  return "1wk";
   if (r == "5y"  || r == "10y" || r == "max") return "1mo";
   return "1d";
+}
+
+static const char* yahooRange(const String& r) {
+  if (r == "1m" || r == "5m") return "1d";
+  if (r == "30m") return "5d";
+  if (r == "60m") return "1mo";
+  return r.c_str();
 }
 
 static String buildYahooUrl(const TickerSettings& t, const char* host, const char* symbol) {
@@ -191,7 +201,7 @@ static String buildYahooUrl(const TickerSettings& t, const char* host, const cha
   url += F(YAHOO_CHART_PATH);
   url += urlEncode(symbol);
   url += F("?range=");
-  url += range;
+  url += yahooRange(range);
   url += F("&interval=");
   url += yahooInterval(range);
   return url;
@@ -623,13 +633,35 @@ static bool fetchNaverForeign(const Settings& s, const TickerSettings& ts, const
 static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const char* cleanCode, StockData& d) {
   String url = F("https://api.stock.naver.com/chart/domestic/item/");
   url += cleanCode;
-  url += F("/minute?range=1");
+  url += F("/minute");
+
+  time_t now = time(nullptr);
+  if (now > 1700000000) {
+    int daysBack = 2;
+    if (ts.range == "30m" || ts.range == "60m") {
+      daysBack = 6;
+    }
+    time_t start = now - (daysBack * 86400);
+    struct tm tmStart, tmNow;
+    localtime_r(&start, &tmStart);
+    localtime_r(&now, &tmNow);
+
+    char param[80];
+    snprintf(param, sizeof(param),
+             "?startDateTime=%04d%02d%02d090000&endDateTime=%04d%02d%02d%02d%02d00",
+             tmStart.tm_year + 1900, tmStart.tm_mon + 1, tmStart.tm_mday,
+             tmNow.tm_year + 1900, tmNow.tm_mon + 1, tmNow.tm_mday,
+             tmNow.tm_hour, tmNow.tm_min);
+    url += param;
+  } else {
+    url += F("?range=1");
+  }
 
   std::unique_ptr<NetClient> client(platformMakeSecureClient(2048, nullptr, 512, true));
   if (!client) return false;
 
   HTTPClient http;
-  http.setTimeout((s.httpTimeout > 2500) ? 2500 : s.httpTimeout);
+  http.setTimeout((s.httpTimeout > 3500) ? 3500 : s.httpTimeout);
   http.setReuse(false);
   http.useHTTP10(true);
   if (!http.begin(*client, url)) return false;
@@ -657,15 +689,30 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   else if (ts.range == "30m") interval = 30;
   else if (ts.range == "60m") interval = 60;
 
-  // Temporary ring buffer for candles
+  // Temporary ring buffer for candles & date tracking
   StockData::Candle ring[MAX_SPARK_POINTS];
+  uint32_t ringDates[MAX_SPARK_POINTS];
   uint8_t ringCount = 0;
   uint8_t ringHead = 0;
+
+  auto pushRing = [&](const StockData::Candle& c, uint32_t dt) {
+    if (ringCount < targetPoints) {
+      ring[ringCount] = c;
+      ringDates[ringCount] = dt;
+      ringCount++;
+    } else {
+      ring[ringHead] = c;
+      ringDates[ringHead] = dt;
+      ringHead = (ringHead + 1) % targetPoints;
+    }
+  };
 
   // Stream parsing line by line / buffer scanning
   // JSON format: [{"localDateTime":"...","currentPrice":...,"openPrice":...,"highPrice":...,"lowPrice":...,"accumulatedTradingVolume":...},...]
   float curGroupOpen = 0, curGroupHigh = -1e9f, curGroupLow = 1e9f, curGroupClose = 0;
   int groupCount = 0;
+  uint32_t lastDate = 0;
+  uint32_t curDate = 0;
 
   char buf[256];
   uint32_t lastPoll = millis();
@@ -673,7 +720,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   stream->setTimeout(150);
 
   while (http.connected() || stream->available()) {
-    if (g_abortFetch || (millis() - loopStart > 3500)) {
+    if (g_abortFetch || (millis() - loopStart > 4500)) {
       break;
     }
     if (millis() - lastPoll > 30) {
@@ -698,7 +745,26 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
     if (objLen <= 0) continue;
     buf[objLen] = 0;
 
-    // Search for currentPrice, openPrice, highPrice, lowPrice
+    // Search for localDateTime, currentPrice, openPrice, highPrice, lowPrice
+    char* pDt = strstr(buf, "\"localDateTime\":\"");
+    if (pDt) {
+      char dateBuf[9];
+      memcpy(dateBuf, pDt + 17, 8);
+      dateBuf[8] = 0;
+      curDate = (uint32_t)strtoul(dateBuf, nullptr, 10);
+    }
+
+    // Date boundary check: if trading day changed, flush previous day's partial group
+    if (lastDate != 0 && curDate != 0 && curDate != lastDate) {
+      if (groupCount > 0) {
+        pushRing({curGroupOpen, curGroupHigh, curGroupLow, curGroupClose}, lastDate);
+        groupCount = 0;
+        curGroupHigh = -1e9f;
+        curGroupLow = 1e9f;
+      }
+    }
+    if (curDate != 0) lastDate = curDate;
+
     char* pCur = strstr(buf, "\"currentPrice\":");
     char* pOpen = strstr(buf, "\"openPrice\":");
     char* pHigh = strstr(buf, "\"highPrice\":");
@@ -718,14 +784,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
         groupCount++;
 
         if (groupCount >= interval) {
-          // Push candle to ring buffer
-          StockData::Candle c = {curGroupOpen, curGroupHigh, curGroupLow, curGroupClose};
-          if (ringCount < targetPoints) {
-            ring[ringCount++] = c;
-          } else {
-            ring[ringHead] = c;
-            ringHead = (ringHead + 1) % targetPoints;
-          }
+          pushRing({curGroupOpen, curGroupHigh, curGroupLow, curGroupClose}, curDate);
           groupCount = 0;
           curGroupHigh = -1e9f;
           curGroupLow = 1e9f;
@@ -737,13 +796,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
 
   // If leftover in group, push it
   if (groupCount > 0) {
-    StockData::Candle c = {curGroupOpen, curGroupHigh, curGroupLow, curGroupClose};
-    if (ringCount < targetPoints) {
-      ring[ringCount++] = c;
-    } else {
-      ring[ringHead] = c;
-      ringHead = (ringHead + 1) % targetPoints;
-    }
+    pushRing({curGroupOpen, curGroupHigh, curGroupLow, curGroupClose}, lastDate);
   }
 
   // Populate d.candles & d.spark in chronological order
@@ -751,14 +804,24 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   d.candleCount = 0;
   d.dateSplitIdx = -1;
 
+  uint32_t candleDates[MAX_SPARK_POINTS];
   for (uint8_t i = 0; i < ringCount; i++) {
     uint8_t idx = (ringHead + i) % ringCount;
     d.candles[d.candleCount++] = ring[idx];
     d.spark[d.sparkCount++] = ring[idx].close;
+    candleDates[i] = ringDates[idx];
   }
 
-  // Intraday minute candles are all from today, so no date boundary line is drawn.
-  d.dateSplitIdx = -1;
+  // Find dateSplitIdx: first candle of the most recent day (if multi-day)
+  if (ringCount > 1 && candleDates[ringCount - 1] > 0) {
+    uint32_t latestDay = candleDates[ringCount - 1];
+    for (uint8_t i = 0; i < ringCount; i++) {
+      if (candleDates[i] == latestDay) {
+        if (i > 0) d.dateSplitIdx = (int8_t)i;
+        break;
+      }
+    }
+  }
 
   if (d.sparkCount > 0) {
     d.spark[d.sparkCount - 1] = d.price;
@@ -767,6 +830,14 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
       if (d.price > d.candles[d.candleCount - 1].high) d.candles[d.candleCount - 1].high = d.price;
       if (d.price < d.candles[d.candleCount - 1].low)  d.candles[d.candleCount - 1].low = d.price;
     }
+  }
+
+  // Edge case safety: if only 1 candle exists (e.g. right at market open 09:00:10), duplicate it so candleCount >= 2
+  if (d.candleCount == 1) {
+    d.candles[1] = d.candles[0];
+    d.candleCount = 2;
+    d.spark[1] = d.spark[0];
+    d.sparkCount = 2;
   }
 
   return (d.candleCount >= 2);
