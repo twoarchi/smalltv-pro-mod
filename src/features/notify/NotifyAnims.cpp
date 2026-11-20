@@ -163,6 +163,7 @@ const NotifyAnimEntry notify_anim_table[NOTIFY_ANIM_ID_COUNT] = {
   {"phone",   &notify_anims[NOTIFY_ANIM_PHONE],   nullptr,  0,  0, 0,   0},
   {"telegram",&notify_anims[NOTIFY_ANIM_TELEGRAM],nullptr,  0,  0, 0,   0},
   {"sms",     &notify_anims[NOTIFY_ANIM_SMS],     nullptr,  0,  0, 0,   0},
+  {"lpmusic", &notify_anims[NOTIFY_ANIM_LPMUSIC], nullptr,  0,  0, 0,   0},
 };
 
 uint8_t notifyAnimW(const NotifyAnimEntry& e) {
@@ -221,6 +222,9 @@ if (!strcasecmp(name, "mail"))    return NOTIFY_ANIM_ID_MAILBOX;
   if (!strcasecmp(name, "call"))    return NOTIFY_ANIM_ID_PHONE;
   if (!strcasecmp(name, "tg"))      return NOTIFY_ANIM_ID_TELEGRAM;
   if (!strcasecmp(name, "sms"))     return NOTIFY_ANIM_ID_SMS;
+  if (!strcasecmp(name, "lpmusic")) return NOTIFY_ANIM_ID_LPMUSIC;
+  if (!strcasecmp(name, "lp"))      return NOTIFY_ANIM_ID_LPMUSIC;
+  if (!strcasecmp(name, "music"))   return NOTIFY_ANIM_ID_LPMUSIC;
   if (!strcasecmp(name, "message")) return NOTIFY_ANIM_ID_SMS;
   if (!strcasecmp(name, "msg"))     return NOTIFY_ANIM_ID_SMS;
   if (!strcasecmp(name, "text"))    return NOTIFY_ANIM_ID_SMS;

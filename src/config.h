@@ -13,7 +13,7 @@
 // Firmware identity
 // ---------------------------------------------------------------------------
 #define FW_NAME     "smalltv-mod"
-#define FW_VERSION  "3.12.3"
+#define FW_VERSION  "3.12.4"
 
 // Project / update references (shown in the web UI; used by the GitHub self-update)
 //
@@ -187,7 +187,7 @@
 // Full-screen attention overlay (POST /api/notify), in seconds.
 #define NOTIFY_TTL_DEFAULT_SEC  20
 #define NOTIFY_TTL_MIN_SEC       2
-#define NOTIFY_TTL_MAX_SEC     120
+#define NOTIFY_TTL_MAX_SEC     86400
 
 // Pending overlays wait in a fixed-size queue rather than overwriting each other,
 // so a burst shows every event in turn instead of only the last one. Depth and

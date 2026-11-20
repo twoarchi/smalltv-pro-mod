@@ -558,6 +558,13 @@ static void handleNotify() {
   // a second field: scripts written against the old API keep working untouched.
   const char* type = doc["type"];
   if (!type) type = doc["state"];
+
+  if (doc["clear"].as<bool>() || doc["dismiss"].as<bool>() ||
+      (type && (!strcasecmp(type, "clear") || !strcasecmp(type, "dismiss") || !strcasecmp(type, "stop")))) {
+    g_notifyMode.dismiss();
+    server.send(200, "application/json", "{\"ok\":true,\"dismissed\":true}");
+    return;
+  }
   if (doc["size"].is<int>()) {
     int sz = doc["size"].as<int>();
     if (sz == 10 || sz == 12 || sz == 16 || sz == 20 || sz == 24 || sz == 32) g_koreanFontSize = (uint8_t)sz;

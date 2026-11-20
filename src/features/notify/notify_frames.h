@@ -51,7 +51,7 @@ static const uint16_t notify_waiting_holds[7] = {330,90,80,80,90,80,80};
 
 static const uint16_t notify_single_hold[1] = {1000};
 
-#define NOTIFY_ANIM_COUNT 11
+#define NOTIFY_ANIM_COUNT 12
 #define NOTIFY_ANIM_DONE 0
 #define NOTIFY_ANIM_WAITING 1
 #define NOTIFY_ANIM_YAHOO 2
@@ -63,6 +63,7 @@ static const uint16_t notify_single_hold[1] = {1000};
 #define NOTIFY_ANIM_PHONE 8
 #define NOTIFY_ANIM_TELEGRAM 9
 #define NOTIFY_ANIM_SMS 10
+#define NOTIFY_ANIM_LPMUSIC 11
 
 static const NotifyAnim notify_anims[NOTIFY_ANIM_COUNT] = {
     {24, 30, 14, notify_done_palette, notify_done_frames, notify_done_holds},
@@ -76,4 +77,5 @@ static const NotifyAnim notify_anims[NOTIFY_ANIM_COUNT] = {
     {80, 80, 10, notify_phone_palette, notify_phone_frames, notify_phone_holds},
     {80, 80, 4, notify_telegram_palette, notify_telegram_frames, notify_telegram_holds},
     {80, 80, 19, notify_sms_palette, notify_sms_frames, notify_sms_holds},
+    {80, 80, 12, notify_lpmusic_palette, notify_lpmusic_frames, notify_lpmusic_holds},
 };
