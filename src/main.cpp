@@ -424,6 +424,10 @@ static void buttonService() {
 }
 #endif
 
+#if defined(SMALLTV_FAMILY_ESP32)
+RTC_DATA_ATTR static uint8_t s_rtcCrashStreak = 0;
+#endif
+
 void buttonPoll() {
 #ifdef BTN_PIN
   buttonService();
@@ -465,15 +469,27 @@ void setup() {
   Serial.println(pr.reason);
 
   if (pr.wasCrash) {
-    g_safeMode = true;                   // crashed last boot -> stay out of the crash path
     strlcpy(g_epcStr,  pr.epc,  sizeof(g_epcStr));
     strlcpy(g_addrStr, pr.addr, sizeof(g_addrStr));
     char rich[80];
     snprintf(rich, sizeof(rich), "%s epc %s addr %s", pr.reason.c_str(),
              g_epcStr[0] ? g_epcStr : "-", g_addrStr[0] ? g_addrStr : "-");
     g_resetReason = rich;
+#if defined(SMALLTV_FAMILY_ESP32)
+    s_rtcCrashStreak++;
+    if (s_rtcCrashStreak >= 3) {
+      g_safeMode = true;                   // 3 consecutive crashes in a row -> persistent safe mode
+    } else {
+      g_safeMode = false;                  // 1st or 2nd crash -> auto-recover cleanly
+    }
+#else
+    g_safeMode = true;                     // crashed last boot -> stay out of the crash path
+#endif
   } else {
     g_resetReason = pr.reason;
+#if defined(SMALLTV_FAMILY_ESP32)
+    s_rtcCrashStreak = 0;
+#endif
   }
 
   Serial.println("[boot] settings");
@@ -575,8 +591,21 @@ void loop() {
   // stops the retries by itself.
   wgService(g_settings);
 
+#if defined(SMALLTV_FAMILY_ESP32)
+  if (s_rtcCrashStreak && millis() > 20000) {
+    s_rtcCrashStreak = 0;
+  }
+#endif
+
   if (g_safeMode) {
-    delay(5);
+#ifdef BTN_PIN
+    buttonService();
+#endif
+    static uint32_t s_safeStart = millis();
+    if (millis() - s_safeStart > 60000) {
+      ESP.restart();
+    }
+    delay(10);
     return;  // crashed last boot: web UI stays up for OTA recovery, no rendering
   }
 

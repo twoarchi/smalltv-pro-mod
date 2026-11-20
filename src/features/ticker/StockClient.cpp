@@ -295,6 +295,7 @@ static bool fetchNaverForeignMinute(const Settings& s, const TickerSettings& ts,
   url += symbol;
   url += F("?periodType=day");
 
+  if (ESP.getFreeHeap() < 28000 || platformMaxFreeBlock() < 20000) return false;
   std::unique_ptr<NetClient> client(platformMakeSecureClient(2048, nullptr, 512, true));
   if (!client) return false;
 
@@ -342,11 +343,10 @@ static bool fetchNaverForeignMinute(const Settings& s, const TickerSettings& ts,
     if (g_abortFetch || (millis() - loopStart > 3500)) {
       break;
     }
-    if (millis() - lastPoll > 30) {
-      buttonPoll();
-      webPortalLoop();
-      yield();
+    if (millis() - lastPoll > 40) {
       lastPoll = millis();
+      yield();
+      delay(1);
       if (g_abortFetch) break;
     }
 
@@ -476,6 +476,7 @@ static bool fetchNaverForeign(const Settings& s, const TickerSettings& ts, const
   quoteUrl += symbol;
   quoteUrl += F("/basic");
 
+  if (ESP.getFreeHeap() < 28000 || platformMaxFreeBlock() < 20000) return false;
   std::unique_ptr<NetClient> client(platformMakeSecureClient(2048, nullptr, 512, true));
   if (!client) return false;
 
@@ -671,6 +672,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
     url += F("/minute?range=1");
   }
 
+  if (ESP.getFreeHeap() < 28000 || platformMaxFreeBlock() < 20000) return false;
   std::unique_ptr<NetClient> client(platformMakeSecureClient(2048, nullptr, 512, true));
   if (!client) return false;
 
@@ -705,9 +707,9 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   else if (ts.range == "30m") interval = 30;
   else if (ts.range == "60m") interval = 60;
 
-  // Temporary ring buffer for candles & date tracking
-  StockData::Candle ring[MAX_SPARK_POINTS];
-  uint32_t ringDates[MAX_SPARK_POINTS];
+  // Static ring buffer for candles & date tracking (avoids stack overflow)
+  static StockData::Candle ring[MAX_SPARK_POINTS];
+  static uint32_t ringDates[MAX_SPARK_POINTS];
   uint8_t ringCount = 0;
   uint8_t ringHead = 0;
 
@@ -739,11 +741,10 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
     if (g_abortFetch || (millis() - loopStart > maxLoopMs)) {
       break;
     }
-    if (millis() - lastPoll > 30) {
-      buttonPoll();
-      webPortalLoop();
-      yield();
+    if (millis() - lastPoll > 40) {
       lastPoll = millis();
+      yield();
+      delay(1);
       if (g_abortFetch) break;
     }
 
@@ -821,7 +822,7 @@ static bool fetchNaverMinute(const Settings& s, const TickerSettings& ts, const 
   d.dateSplitIdx = -1;
   d.dateSplitCount = 0;
 
-  uint32_t candleDates[MAX_SPARK_POINTS];
+  static uint32_t candleDates[MAX_SPARK_POINTS];
   for (uint8_t i = 0; i < ringCount; i++) {
     uint8_t idx = (ringHead + i) % ringCount;
     d.candles[d.candleCount++] = ring[idx];
@@ -867,6 +868,7 @@ static bool fetchNaver(const Settings& s, const TickerSettings& ts, const char* 
   quoteUrl += cleanCode;
   quoteUrl += F("/basic");
 
+  if (ESP.getFreeHeap() < 28000 || platformMaxFreeBlock() < 20000) return false;
   std::unique_ptr<NetClient> client(platformMakeSecureClient(2048, nullptr, 512, true));
   if (!client) return false;
 
