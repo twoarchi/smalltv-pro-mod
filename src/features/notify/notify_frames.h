@@ -77,5 +77,5 @@ static const NotifyAnim notify_anims[NOTIFY_ANIM_COUNT] = {
     {80, 80, 10, notify_phone_palette, notify_phone_frames, notify_phone_holds},
     {80, 80, 4, notify_telegram_palette, notify_telegram_frames, notify_telegram_holds},
     {80, 80, 19, notify_sms_palette, notify_sms_frames, notify_sms_holds},
-    {80, 80, 12, notify_lpmusic_palette, notify_lpmusic_frames, notify_lpmusic_holds},
+    {80, 80, 1, notify_lpmusic_palette, notify_lpmusic_frames, notify_lpmusic_holds},
 };
